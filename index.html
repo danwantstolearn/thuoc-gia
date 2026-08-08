@@ -51,12 +51,14 @@
   header p { color: var(--light0); margin-top: 8px; font-size: 0.875rem; }
 
   .searchbox {
-    display: flex; gap: 8px; position: relative;
+    display: flex; gap: 8px; position: sticky; top: 8px; z-index: 30;
     background: var(--dark1);
     border: 1px solid var(--dark2);
     border-radius: var(--radius-m);
     padding: 6px;
+    transition: box-shadow 0.15s, border-color 0.15s;
   }
+  .searchbox.stuck { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); border-color: var(--dark3); }
   .searchbox:focus-within { border-color: var(--frost2); }
   .searchbox .input-wrap {
     flex: 1; min-width: 0;
@@ -97,9 +99,13 @@
     border-radius: var(--radius-m);
     overflow-x: auto;
   }
+  /* PC: bỏ scroll container (overflow-x auto làm thead sticky không dính theo viewport) */
+  @media (min-width: 1280px) {
+    .matrix-wrap { overflow-x: clip; }
+  }
   table.matrix { width: 100%; border-collapse: collapse; min-width: 640px; }
 
-  thead { position: sticky; top: 0; z-index: 2; background: var(--dark1); }
+  thead { position: sticky; top: 68px; z-index: 2; background: var(--dark1); }
   thead th {
     font-size: 0.75rem; font-weight: 600; color: var(--light0);
     padding: 8px 10px; text-align: center;
@@ -129,13 +135,13 @@
   }
 
   td.name {
-    text-align: left; min-width: 280px; max-width: 420px; line-height: 1.4; font-weight: 400;
+    text-align: left; min-width: 240px; max-width: 360px; line-height: 1.4; font-weight: 400;
     position: sticky; left: 0; background: var(--dark1); z-index: 1;
   }
   td.name .name-row { display: flex; align-items: center; gap: 14px; }
   td.name .title { flex: 1; min-width: 0; }
   td.name .row-thumb {
-    width: 150px; height: 150px; object-fit: contain; flex-shrink: 0;
+    width: 130px; height: 130px; object-fit: contain; flex-shrink: 0;
     border-radius: var(--radius-s); border: 1px solid var(--dark2);
     background: var(--dark0);
   }
@@ -421,6 +427,11 @@ function render(q, data) {
 $btn.addEventListener('click', search);
 $q.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
 $q.focus();
+
+// Search box dính khi cuộn
+window.addEventListener('scroll', () => {
+  $searchbox.classList.toggle('stuck', window.scrollY > 8);
+}, { passive: true });
 
 // ============ Mobile: card layout ============
 function renderMobile(q, data) {
