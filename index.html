@@ -113,6 +113,10 @@
     position: sticky; left: 0; z-index: 3; background: var(--dark1);
   }
   thead th.sup-err { color: var(--red); }
+  thead th .sup-sugg {
+    display: block; font-size: 0.625rem; font-weight: 600; color: var(--yellow);
+    font-style: italic; margin-top: 2px;
+  }
 
   tbody td { padding: 8px 10px; font-size: 0.8125rem; vertical-align: middle; text-align: center; }
   tbody tr { border-bottom: 1px solid var(--dark2); }
@@ -155,6 +159,11 @@
   .gstart { border-left: 1px solid var(--dark2); }
 
   .sup-err-note { padding: 10px 16px; color: var(--red); font-size: 0.8125rem; border-top: 1px solid var(--dark2); }
+  .sup-sugg-note {
+    padding: 8px 14px; margin-bottom: 10px; color: var(--yellow);
+    background: rgba(235, 203, 139, 0.08); border: 1px solid rgba(235, 203, 139, 0.25);
+    border-radius: var(--radius-s); font-size: 0.8125rem;
+  }
   .empty { padding: 28px 16px; text-align: center; color: var(--light0); font-size: 0.875rem; }
 
   footer { text-align: center; color: var(--light0); opacity: 0.75; font-size: 0.75rem; margin-top: 28px; line-height: 1.6; }
@@ -334,7 +343,7 @@ function render(q, data) {
 
   const thead1 = `<tr class="l1">
     <th class="col-name" rowspan="2">Tên thuốc</th>` +
-    sups.map(s => `<th colspan="${units.length}" class="${s.ok ? 'gstart' : 'gstart sup-err'}">${esc(s.name)}${s.ok ? '' : ' (lỗi)'}</th>`).join('') +
+    sups.map(s => `<th colspan="${units.length}" class="${s.ok ? 'gstart' : 'gstart sup-err'}">${esc(s.name)}${s.suggestion ? ` <span class="sup-sugg">(gợi ý: ${esc(s.suggestion)})</span>` : ''}${s.ok ? '' : ' (lỗi)'}</th>`).join('') +
     `</tr>`;
   const thead2 = `<tr class="l2">` +
     sups.map(s => units.map((u, ui) => `<th class="${ui === 0 ? 'gstart' : ''}">${esc(u.name)}</th>`).join('')).join('') +
@@ -394,7 +403,12 @@ function render(q, data) {
     `<div class="sup-err-note">⚠ ${esc(s.name)}: không lấy được dữ liệu — ${esc(s.error || 'lỗi không xác định')}</div>`
   ).join('');
 
+  // Ghi chú khi supplier tự search lại bằng từ khóa gợi ý (vd Long Châu: "Augmen" -> "augmentin")
+  const suggNote = sups.filter(s => s.ok && s.suggestion)
+    .map(s => `<div class="sup-sugg-note">${esc(s.name)}: tìm theo gợi ý "${esc(s.suggestion)}"</div>`).join('');
+
   $results.innerHTML = `
+    ${suggNote}
     <div class="matrix-wrap">
       <table class="matrix">
         <thead>${thead1}${thead2}</thead>
@@ -507,7 +521,11 @@ function renderMobile(q, data) {
     `<div class="sup-err-note">⚠ ${esc(s.name)}: không lấy được dữ liệu — ${esc(s.error || 'lỗi không xác định')}</div>`
   ).join('');
 
-  $results.innerHTML = `<div class="cards">${cards}</div>${errNote}`;
+  // Ghi chú khi supplier tự search lại bằng từ khóa gợi ý
+  const suggNote = sups.filter(s => s.ok && s.suggestion)
+    .map(s => `<div class="sup-sugg-note">${esc(s.name)}: tìm theo gợi ý "${esc(s.suggestion)}"</div>`).join('');
+
+  $results.innerHTML = `${suggNote}<div class="cards">${cards}</div>${errNote}`;
 }
 
 // ================= Tra cứu trực tiếp từ trình duyệt (GitHub Pages, không backend) =================
@@ -572,6 +590,29 @@ function parseLongChau(d) {
   return out;
 }
 
+async function fetchLongChauSearch(q) {
+  const r = await fetch(
+    'https://api.nhathuoclongchau.com.vn/lccus/search-product-service/api/products/ecom/product/search',
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: q }) }
+  );
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return parseLongChau(await r.json());
+}
+
+async function fetchLcSuggest(q) {
+  // Long Châu: từ khóa cụt (vd "Augmen") search chính trả rác, nhưng endpoint
+  // suggest hiểu đúng -> dùng gợi ý để search lại cho chuẩn.
+  try {
+    const r = await fetch(
+      'https://api.nhathuoclongchau.com.vn/lccus/search-product-service/api/products/ecom/product/suggest?keyword=' + encodeURIComponent(q),
+      { headers: { Accept: 'application/json' } }
+    );
+    if (!r.ok) return [];
+    const d = await r.json();
+    return (d.keywords || []).map(k => k.keyword).filter(k => k && k.toLowerCase() !== q.toLowerCase()).slice(0, 3);
+  } catch (e) { return []; }
+}
+
 async function fetchSupplier(sup, q) {
   try {
     if (sup.id === 'pharmacity') {
@@ -582,12 +623,7 @@ async function fetchSupplier(sup, q) {
       return parsePharmacity(await r.json());
     }
     if (sup.id === 'longchau') {
-      const r = await fetch(
-        'https://api.nhathuoclongchau.com.vn/lccus/search-product-service/api/products/ecom/product/search',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: q }) }
-      );
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return parseLongChau(await r.json());
+      return await fetchLongChauSearch(q);
     }
     throw new Error('Không rõ nhà cung cấp');
   } catch (e) {
@@ -631,12 +667,24 @@ async function matrixSearch(q) {
       suppliersMeta.push({ id: s.id, name: s.name, ok: false, error: 'Không lấy được dữ liệu' });
       continue;
     }
-    suppliersMeta.push({ id: s.id, name: s.name, ok: true, error: null });
-    // Lọc bỏ SP không khớp từ khóa nào (search fuzzy trả kèm rác) — chỉ khi query có token thật
+    let suggestion = null;
     let ranked = rerank(items, q);
     const qTokens = norm(q).split(' ').filter(t => t.length >= 2);
     if (qTokens.length) ranked = ranked.filter(it => (it._score || 0) > 0);
+    // Long Châu: search chính không ra kết quả khớp (từ khóa cụt) -> hỏi suggest rồi search lại
+    if (!ranked.length && s.id === 'longchau' && qTokens.length) {
+      const kws = await fetchLcSuggest(q);
+      for (const kw of kws) {
+        try {
+          const items2 = await fetchLongChauSearch(kw);
+          if (!items2) continue;
+          const ranked2 = rerank(items2, q).filter(it => (it._score || 0) > 0);
+          if (ranked2.length) { ranked = ranked2; suggestion = kw; break; }
+        } catch (e) { /* thử gợi ý kế tiếp */ }
+      }
+    }
     ranked = ranked.slice(0, 20);
+    suppliersMeta.push({ id: s.id, name: s.name, ok: true, error: null, suggestion });
     for (const it of ranked) {
       const k = productKey(it.title);
       if (!k) continue;
