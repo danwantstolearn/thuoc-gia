@@ -4,7 +4,7 @@ Webapp so sánh giá thuốc giữa các nhà cung cấp (Long Châu, Pharmacity
 
 - Chạy 100% tĩnh trên GitHub Pages — gọi thẳng API public của các nhà cung cấp từ trình duyệt.
 - `x` = không bán / không có giá công khai (thuốc kê đơn).
-- Bản local (Flask + cache) nằm ở `thuoc-gia/` trong workspace, dùng chung file `index.html`.
+- Bản local (Flask + cache) nằm ở `gia-thuoc/` trong workspace, dùng chung file `index.html`.
 
 ## Deploy
 
