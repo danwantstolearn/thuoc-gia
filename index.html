@@ -410,11 +410,16 @@ function renderMobile(q, data) {
       return cell && Object.keys(cell).length > 0;
     });
     const supNoCell = okSups.filter(s => !supRows.includes(s));
-    // Các đơn vị xuất hiện trong sản phẩm này (theo thứ tự ưu tiên toàn bảng)
-    const prodUnits = units.filter(u => supRows.some(s => r.cells[s.id][u.key]));
-    const hasPrice = supRows.some(s =>
+    // Supplier kê đơn thuần: có cell nhưng không có giá công khai nào
+    const rxSups = supRows.filter(s =>
+      !Object.values(r.cells[s.id]).some(v => v.price != null)
+    );
+    // Supplier có ít nhất 1 giá -> làm cột trong mini-bảng
+    const priceSups = supRows.filter(s =>
       Object.values(r.cells[s.id]).some(v => v.price != null)
     );
+    // Các đơn vị xuất hiện trong số supplier có giá (theo thứ tự ưu tiên toàn bảng)
+    const prodUnits = units.filter(u => priceSups.some(s => r.cells[s.id][u.key]));
 
     const kedonBlock = s => {
       const url = r.urls && r.urls[s.id];
@@ -433,15 +438,15 @@ function renderMobile(q, data) {
     let body = '';
     if (!supRows.length) {
       body = `<div class="csup"><div class="csup-name">${esc(supNoCell[0] ? supNoCell[0].name : '')}</div><div class="csup-x">Không có bán</div></div>`;
-    } else if (!hasPrice) {
-      // Thuốc kê đơn: giữ block cũ
+    } else if (!priceSups.length) {
+      // Tất cả là thuốc kê đơn: giữ block cũ (link + giá từ hỏi đáp/đánh giá)
       body = supRows.map(kedonBlock).join('');
     } else {
-      // Mini-bảng: cột = đơn vị, hàng = nhà cung cấp
+      // Mini-bảng: cột = đơn vị, hàng = nhà cung cấp CÓ GIÁ
       const colTpl = `grid-template-columns: minmax(84px, 1.1fr) repeat(${prodUnits.length}, 1fr)`;
       const head = `<div class="ct-row ct-head" style="${colTpl}"><div class="ct-name">Nhà thuốc</div>` +
         prodUnits.map(u => `<div class="ct-unit">${esc(u.name)}</div>`).join('') + `</div>`;
-      const rowsHtml = supRows.map(s => {
+      const rowsHtml = priceSups.map(s => {
         const url = r.urls && r.urls[s.id];
         const supName = (r.names && r.names[s.id]) ? r.names[s.id] : '';
         const cells = prodUnits.map(u => {
@@ -455,6 +460,8 @@ function renderMobile(q, data) {
         return `<div class="ct-row" style="${colTpl}"><div class="ct-name">${esc(s.name)}</div>${cells}</div>`;
       }).join('');
       body = `<div class="c-table">${head}${rowsHtml}</div>`;
+      // Supplier kê đơn (có mặt nhưng không giá) -> block riêng: link + giá từ hỏi đáp/đánh giá
+      if (rxSups.length) body += rxSups.map(kedonBlock).join('');
       if (supNoCell.length) {
         body += supNoCell.map(s => `<div class="ct-nosup">${esc(s.name)}: không có bán</div>`).join('');
       }
