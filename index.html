@@ -129,6 +129,12 @@
   td.kedon { font-style: italic; }
   td.kedon a { color: var(--orange); text-decoration: none; font-style: normal; }
   td.kedon a:hover { color: var(--frost2); text-decoration: underline; }
+  td.kedon .meta {
+    display: block; font-style: normal; font-size: 0.75rem; font-weight: 600;
+    margin-top: 2px; white-space: nowrap;
+  }
+  td.kedon .meta.qa { color: var(--green); }
+  td.kedon .meta.review { color: var(--frost0); }
   td.price .badge {
     display: inline-block; font-size: 0.5625rem; font-weight: 700; color: var(--dark0);
     background: var(--green); border-radius: var(--radius-s); padding: 1px 5px;
@@ -274,7 +280,18 @@ function render(q, data) {
         const inner = url
           ? `<a href="${esc(url)}" target="_blank" rel="noopener">Thuốc kê đơn</a>`
           : 'Thuốc kê đơn';
-        return `<td class="kedon gstart" colspan="${units.length}">${inner}</td>`;
+        const qa = (r.qa_prices || {})[s.id];
+        const rv = (r.review_prices || {})[s.id];
+        let meta = '';
+        if (qa && qa.length) {
+          const parts = qa.slice(0, 3).map(x => {
+            const d = (x.date || '').slice(0, 10).split('-').reverse().join('/');
+            return d ? `${fmt(x.price)} (${d})` : fmt(x.price);
+          });
+          meta += `<span class="meta qa">giá từ hỏi đáp: ${parts.join(' · ')}</span>`;
+        }
+        if (rv && rv.length) meta += `<span class="meta review">giá từ đánh giá: ${rv.slice(0, 2).map(a => fmt(a)).join(' · ')}</span>`;
+        return `<td class="kedon gstart" colspan="${units.length}">${inner}${meta}</td>`;
       }
 
       return units.map((u, ui) => {
@@ -334,7 +351,7 @@ function parsePharmacity(d) {
     if (!variants.length) continue;
     out.push({
       title: name.slice(0, 160), price: variants[0].price, price_text: variants[0].price_text,
-      variants, image: (it.thumbnail || {}).image_url || '',
+      variants, image: (it.thumbnail || {}).image_url || '', sku: it.sku,
       url: 'https://www.pharmacity.vn/' + slug + '.html',
     });
   }
@@ -362,7 +379,7 @@ function parseLongChau(d) {
     if (!variants.length) continue;
     out.push({
       title: name.slice(0, 160), price: variants[0].price, price_text: variants[0].price_text,
-      variants, image: p.image || '',
+      variants, image: p.image || '', sku: p.sku,
       url: 'https://nhathuoclongchau.com.vn/' + slug,
     });
   }
@@ -433,10 +450,11 @@ async function matrixSearch(q) {
       const k = productKey(it.title);
       if (!k) continue;
       let row = rows[k];
-      if (!row) row = rows[k] = { title: it.title, url: it.url, image: it.image || '', urls: {}, cells: {}, best_score: 0 };
+      if (!row) row = rows[k] = { title: it.title, url: it.url, image: it.image || '', urls: {}, skus: {}, cells: {}, best_score: 0 };
       if (it.title.length > row.title.length) row.title = it.title;
       if (!row.image && it.image) row.image = it.image;
       if (it.url) { row.urls[s.id] = it.url; row.url = it.url; }
+      if (it.sku) { row.skus[s.id] = it.sku; }
       row.best_score = Math.max(row.best_score, it._score || 0);
       const cell = {};
       for (const v of it.variants) {
@@ -465,7 +483,122 @@ async function matrixSearch(q) {
     .sort((a, b) => (b.best_score - a.best_score) || ((rowMin(a) ?? 1e12) - (rowMin(b) ?? 1e12)))
     .slice(0, 10);
 
+  // Quét giá từ đánh giá/hỏi đáp cho thuốc kê đơn (giới hạn 4 sản phẩm)
+  const rxRows = [];
+  for (const row of rowsList) {
+    let isRx = false;
+    for (const s of SUPPLIERS) {
+      const cell = row.cells[s.id];
+      if (cell && Object.keys(cell).length && !Object.values(cell).some(v => v.price != null)) {
+        if (row.skus && row.skus[s.id]) isRx = true;
+      }
+    }
+    if (isRx) rxRows.push(row);
+    if (rxRows.length >= 4) break;
+  }
+  await Promise.all(rxRows.map(row => scanRowReviews(row)));
+
   return { query: q, limit: 10, units, suppliers: suppliersMeta, rows: rowsList };
+}
+
+// ================= Quét giá trong đánh giá / hỏi đáp (chạy trong browser) =================
+const REVIEW_AMOUNT_RE = /(?:giá|mua|hết|trả|bán|khoảng|tốn|với giá)\s*([\d][\d.,]{1,})|([\d][\d.,]{2,})\s*(?:đ|₫|vnđ|vnd|k\b|nghìn|ngàn)/gi;
+
+function stripHtml(t) {
+  const d = document.createElement('div');
+  d.innerHTML = t;
+  return d.textContent || '';
+}
+
+function scanAmounts(items) {
+  const pairs = [];
+  for (const item of items) {
+    const plain = stripHtml(item.content || '');
+    let m;
+    REVIEW_AMOUNT_RE.lastIndex = 0;
+    while ((m = REVIEW_AMOUNT_RE.exec(plain))) {
+      const raw = (m[1] || m[2] || '').trim();
+      const n = parseInt(raw.replace(/[.,\s]/g, ''), 10);
+      if (isNaN(n)) continue;
+      if (n >= 1900 && n <= 2100) continue;
+      if (n < 500 || n > 50000000) continue;
+      if ((n >= 18000000 && n <= 18999999) || (n >= 19000000 && n <= 19999999)) continue;
+      pairs.push({ price: n, date: item.date || '' });
+    }
+  }
+  return pairs;
+}
+
+function topAmounts(items) {
+  const cnt = {};
+  for (const p of scanAmounts(items)) cnt[p.price] = (cnt[p.price] || 0) + 1;
+  return Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => parseInt(e[0]));
+}
+
+function recentAmounts(items) {
+  const pairs = scanAmounts(items).sort((a, b) => (b.date < a.date ? -1 : b.date > a.date ? 1 : 0));
+  const seen = new Set(), out = [];
+  for (const p of pairs) {
+    if (seen.has(p.price)) continue;
+    seen.add(p.price);
+    out.push({ price: p.price, date: p.date });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+async function fetchLcTexts(kind, sku) {
+  const path = kind === 'qa'
+    ? 'v3/comments?maxResultCount=20&maxReplies=5&skipCount=0&sortBy=createdAt,DESC&filterType=PRODUCT'
+    : 'v3/comments/ratings?maxResultCount=20&maxReplies=5&skipCount=0&filterType=PRODUCT';
+  const r = await fetch(`https://api.nhathuoclongchau.com.vn/lccus/ecom-prod/store-front/${path}&targetId=${sku}`);
+  if (!r.ok) return [];
+  const d = await r.json();
+  const out = [];
+  for (const it of (d.items || [])) {
+    const c = (it.content || '').trim();
+    if (c) out.push({ content: c, date: it.createdAt || '' });
+    for (const rp of (it.replies || [])) {
+      const rc = (rp.content || '').trim();
+      if (rc) out.push({ content: rc, date: rp.createdAt || '' });
+    }
+  }
+  return out;
+}
+
+async function fetchPcTexts(kind, sku) {
+  const url = kind === 'qa'
+    ? `https://api-gateway.pharmacity.vn/pmc-ecm-review/api/public/comment?limit=20&refresh=true&total=0&data_id=${sku}&order_by=category&order=desc&index=1`
+    : `https://api-gateway.pharmacity.vn/pmc-ecm-review/api/public/product-review?sku=${sku}&index=1&limit=20`;
+  const r = await fetch(url);
+  if (!r.ok) return [];
+  const d = await r.json();
+  const items = (d.data && d.data.items) || d.items || [];
+  const out = [];
+  for (const it of items) {
+    const c = (it.content || it.comment || it.review || '').trim();
+    if (c) out.push({ content: c, date: it.created_at || it.createdAt || '' });
+  }
+  return out;
+}
+
+async function scanRowReviews(row) {
+  for (const s of SUPPLIERS) {
+    const cell = row.cells[s.id];
+    if (!cell || !row.skus || !row.skus[s.id]) continue;
+    if (Object.keys(cell).length && !Object.values(cell).some(v => v.price != null)) {
+      const sku = row.skus[s.id];
+      try {
+        const [rvItems, qaItems] = s.id === 'longchau'
+          ? [await fetchLcTexts('review', sku), await fetchLcTexts('qa', sku)]
+          : [await fetchPcTexts('review', sku), await fetchPcTexts('qa', sku)];
+        const rv = topAmounts(rvItems);
+        const qa = recentAmounts(qaItems);
+        if (rv.length) (row.review_prices = row.review_prices || {})[s.id] = rv;
+        if (qa.length) (row.qa_prices = row.qa_prices || {})[s.id] = qa;
+      } catch (e) { /* bỏ qua nếu lỗi mạng */ }
+    }
+  }
 }
 </script>
 </body>
