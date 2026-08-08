@@ -72,6 +72,13 @@
   }
   .searchbox button:hover { background: var(--frost1); }
   .searchbox button:disabled { opacity: 0.5; cursor: wait; }
+  .searchbox #clear {
+    background: transparent; color: var(--light0); border: none;
+    font-size: 0.9375rem; line-height: 1; cursor: pointer; padding: 0 8px;
+    border-radius: 50%; display: none;
+  }
+  .searchbox #clear:hover { color: var(--red); background: rgba(191, 97, 106, 0.15); }
+  .searchbox.has-text #clear { display: block; }
 
   .status { text-align: center; color: var(--light0); margin: 16px 0 12px; font-size: 0.875rem; min-height: 20px; }
   .status.error { color: var(--red); }
@@ -219,8 +226,9 @@
     <p>So sánh giá giữa các nhà cung cấp, theo từng đơn vị bán</p>
   </header>
 
-  <div class="searchbox">
+  <div class="searchbox" id="searchbox">
     <input id="q" type="text" placeholder="VD: paracetamol, amoxicillin, panadol..." autocomplete="off">
+    <button id="clear" type="button" title="Xóa toàn bộ" aria-label="Xóa toàn bộ">✕</button>
     <button id="btn">Tra cứu</button>
   </div>
   <div id="status" class="status"></div>
@@ -238,6 +246,21 @@ const $q = document.getElementById('q');
 const $btn = document.getElementById('btn');
 const $status = document.getElementById('status');
 const $results = document.getElementById('results');
+const $clear = document.getElementById('clear');
+const $searchbox = document.getElementById('searchbox');
+
+function syncClear() {
+  $searchbox.classList.toggle('has-text', $q.value.length > 0);
+}
+$clear.addEventListener('click', () => {
+  $q.value = '';
+  $status.textContent = '';
+  $status.className = 'status';
+  $results.innerHTML = '';
+  syncClear();
+  $q.focus();
+});
+$q.addEventListener('input', syncClear);
 
 function esc(s) {
   const d = document.createElement('div');
