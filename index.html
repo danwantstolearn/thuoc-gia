@@ -376,7 +376,9 @@ function render(q, data) {
         const v = cell[u.key];
         return v && v.price != null;
       });
-      if (!anyPrice) {
+      // Thuốc kê đơn: cờ rx từ supplier (VD Pharmacity báo is_prescription_drug)
+      // hoặc không có giá công khai nào -> gộp ô + link + giá từ đánh giá/hỏi đáp
+      if ((r.rx && r.rx[s.id]) || !anyPrice) {
         // Thuốc kê đơn (không có giá công khai) -> gộp + link
         const supName = (r.names && r.names[s.id]) ? r.names[s.id] : '';
         const inner = url
@@ -470,13 +472,13 @@ function renderMobile(q, data) {
       return cell && Object.keys(cell).length > 0;
     });
     const supNoCell = okSups.filter(s => !supRows.includes(s));
-    // Supplier kê đơn thuần: có cell nhưng không có giá công khai nào
+    // Supplier kê đơn thuần: có cell nhưng cờ kê đơn hoặc không có giá công khai nào
     const rxSups = supRows.filter(s =>
-      !Object.values(r.cells[s.id]).some(v => v.price != null)
+      (r.rx && r.rx[s.id]) || !Object.values(r.cells[s.id]).some(v => v.price != null)
     );
-    // Supplier có ít nhất 1 giá -> làm cột trong mini-bảng
+    // Supplier có ít nhất 1 giá (không phải kê đơn) -> làm cột trong mini-bảng
     const priceSups = supRows.filter(s =>
-      Object.values(r.cells[s.id]).some(v => v.price != null)
+      !(r.rx && r.rx[s.id]) && Object.values(r.cells[s.id]).some(v => v.price != null)
     );
     // Các đơn vị xuất hiện trong số supplier có giá (theo thứ tự ưu tiên toàn bảng)
     const prodUnits = units.filter(u => priceSups.some(s => r.cells[s.id][u.key]));
@@ -569,6 +571,7 @@ function parsePharmacity(d) {
     out.push({
       title: name.slice(0, 160), price: variants[0].price, price_text: variants[0].price_text,
       variants, image: (it.thumbnail || {}).image_url || '', sku: it.sku,
+      rx: !!(it.is_prescription_drug),
       url: 'https://www.pharmacity.vn/' + slug + '.html',
     });
   }
@@ -597,6 +600,7 @@ function parseLongChau(d) {
     out.push({
       title: name.slice(0, 160), price: variants[0].price, price_text: variants[0].price_text,
       variants, image: p.image || '', sku: p.sku,
+      rx: !variants.some(v => v.price != null),
       url: 'https://nhathuoclongchau.com.vn/' + slug,
     });
   }
@@ -702,7 +706,7 @@ async function matrixSearch(q) {
       const k = productKey(it.title);
       if (!k) continue;
       let row = rows[k];
-      if (!row) row = rows[k] = { title: it.title, url: it.url, image: it.image || '', names: {}, urls: {}, skus: {}, cells: {}, best_score: 0, _rep_score: -1, _rep_img: false };
+      if (!row) row = rows[k] = { title: it.title, url: it.url, image: it.image || '', names: {}, urls: {}, skus: {}, rx: {}, cells: {}, best_score: 0, _rep_score: -1, _rep_img: false };
       // Item đại diện: score cao nhất, ưu tiên có ảnh — title/hình/url cùng 1 sản phẩm
       const score = it._score || 0;
       if (score > row._rep_score || (score === row._rep_score && it.image && !row._rep_img)) {
@@ -714,6 +718,7 @@ async function matrixSearch(q) {
       }
       if (it.url) row.urls[s.id] = it.url;
       if (it.sku) row.skus[s.id] = it.sku;
+      if (it.rx) row.rx[s.id] = true;
       row.names[s.id] = it.title;
       row.best_score = Math.max(row.best_score, it._score || 0);
       const cell = {};
@@ -749,7 +754,7 @@ async function matrixSearch(q) {
     let isRx = false;
     for (const s of SUPPLIERS) {
       const cell = row.cells[s.id];
-      if (cell && Object.keys(cell).length && !Object.values(cell).some(v => v.price != null)) {
+      if (cell && Object.keys(cell).length && (row.rx && row.rx[s.id])) {
         if (row.skus && row.skus[s.id]) isRx = true;
       }
     }
@@ -762,7 +767,7 @@ async function matrixSearch(q) {
 }
 
 // ================= Quét giá trong đánh giá / hỏi đáp (chạy trong browser) =================
-const REVIEW_AMOUNT_RE = /(?:giá|mua|hết|trả|bán|khoảng|tốn|với giá)\s*([\d][\d.,]{1,})|([\d][\d.,]{2,})\s*(?:đ|₫|vnđ|vnd|k\b|nghìn|ngàn)/gi;
+const REVIEW_AMOUNT_RE = /(?:giá|mua|hết|trả|bán|khoảng|tốn|với giá)\s*([\d][\d.,]{1,})|([\d][\d.,]{2,})\s*(?:đ\b|₫\b|vnđ\b|vnd\b|k\b|nghìn|ngàn)/gi;
 
 function stripHtml(t) {
   const d = document.createElement('div');
@@ -838,11 +843,21 @@ async function fetchPcTexts(kind, sku) {
   const r = await fetch(url);
   if (!r.ok) return [];
   const d = await r.json();
-  const items = (d.data && d.data.items) || d.items || [];
+  const data = d.data || {};
+  const items = data.items || d.items || [];
   const out = [];
   for (const it of items) {
     const c = (it.content || it.comment || it.review || '').trim();
     if (c) out.push({ content: c, date: it.created_at || it.createdAt || '' });
+  }
+  // Câu trả lời của dược sĩ nằm ở data.replies[].data[].items[] — song song với items
+  for (const rg of (data.replies || [])) {
+    for (const blk of (rg.data || [])) {
+      for (const rp of (blk.items || [])) {
+        const rc = (rp.content || '').trim();
+        if (rc) out.push({ content: rc, date: rp.created_at || rp.createdAt || '' });
+      }
+    }
   }
   return out;
 }
@@ -851,7 +866,7 @@ async function scanRowReviews(row) {
   for (const s of SUPPLIERS) {
     const cell = row.cells[s.id];
     if (!cell || !row.skus || !row.skus[s.id]) continue;
-    if (Object.keys(cell).length && !Object.values(cell).some(v => v.price != null)) {
+    if (Object.keys(cell).length && (row.rx && row.rx[s.id])) {
       const sku = row.skus[s.id];
       try {
         const [rvItems, qaItems] = s.id === 'longchau'
