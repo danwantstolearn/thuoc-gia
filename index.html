@@ -156,11 +156,48 @@
   ::-webkit-scrollbar-thumb { background: var(--dark3); border-radius: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
 
-  @media (max-width: 560px) {
+  @media (max-width: 700px) {
     .wrap { padding-top: 28px; }
     td, th { padding: 7px 9px; }
     .searchbox button { padding: 9px 14px; }
   }
+
+  /* ============ Mobile: card layout (thay bảng khi màn hình hẹp) ============ */
+  .cards { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: var(--dark1);
+    border: 1px solid var(--dark2);
+    border-radius: var(--radius-m);
+    overflow: hidden;
+  }
+  .c-head { display: flex; gap: 10px; padding: 10px 12px; align-items: flex-start; }
+  .c-thumb {
+    width: 64px; height: 64px; object-fit: contain; flex-shrink: 0;
+    border-radius: var(--radius-s); border: 1px solid var(--dark2);
+    background: var(--dark0);
+  }
+  .c-title { font-size: 0.8125rem; line-height: 1.45; font-weight: 500; }
+  .csup { padding: 8px 12px; border-top: 1px solid var(--dark2); }
+  .csup-name { font-size: 0.75rem; font-weight: 700; color: var(--frost1); margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    background: var(--dark2); border-radius: var(--radius-s);
+    padding: 3px 8px; font-size: 0.8125rem;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .chip a { color: var(--orange); text-decoration: none; font-weight: 600; }
+  .chip a:hover { color: var(--frost1); text-decoration: underline; }
+  .chip .badge {
+    display: inline-block; font-size: 0.5625rem; font-weight: 700; color: var(--dark0);
+    background: var(--green); border-radius: var(--radius-s); padding: 1px 5px;
+    letter-spacing: 0.02em;
+  }
+  .csup-x { color: var(--light0); opacity: 0.55; font-style: italic; font-size: 0.8125rem; }
+  .kedon a { color: var(--orange); text-decoration: none; }
+  .kedon a:hover { color: var(--frost2); text-decoration: underline; }
+  .kedon .meta { display: block; font-style: normal; font-size: 0.75rem; font-weight: 600; margin-top: 2px; }
+  .kedon .meta.qa { color: var(--green); }
+  .kedon .meta.review { color: var(--frost0); }
 </style>
 </head>
 <body>
@@ -224,7 +261,16 @@ async function search() {
   }
 }
 
+let lastQ = null, lastData = null;
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (lastData) render(lastQ, lastData); }, 250);
+});
+
 function render(q, data) {
+  lastQ = q; lastData = data;
+  if (window.matchMedia('(max-width: 700px)').matches) return renderMobile(q, data);
   const sups = data.suppliers || [];
   const units = data.units || [];
   const rows = data.rows || [];
@@ -324,6 +370,91 @@ function render(q, data) {
 $btn.addEventListener('click', search);
 $q.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
 $q.focus();
+
+// ============ Mobile: card layout ============
+function renderMobile(q, data) {
+  const sups = data.suppliers || [];
+  const units = data.units || [];
+  const rows = data.rows || [];
+  const okSups = sups.filter(s => s.ok);
+  const errSups = sups.filter(s => !s.ok);
+
+  if (!rows.length) {
+    $status.textContent = `Không tìm thấy sản phẩm cho "${q}"`;
+    $results.innerHTML = errSups.map(s =>
+      `<div class="matrix-wrap"><div class="sup-err-note">${esc(s.name)}: không lấy được dữ liệu — ${esc(s.error || 'lỗi không xác định')}</div></div>`
+    ).join('');
+    return;
+  }
+
+  $status.textContent = `Tìm thấy ${rows.length} sản phẩm cho "${q}" (${okSups.length}/${sups.length} nhà cung cấp)`;
+
+  // giá rẻ nhất toàn bảng
+  let minPrice = Infinity;
+  rows.forEach(r => sups.forEach(s => {
+    const cell = r.cells[s.id]; if (!cell) return;
+    units.forEach(u => { const v = cell[u.key]; if (v && v.price != null && v.price < minPrice) minPrice = v.price; });
+  }));
+
+  const fmtItem = x => {
+    const unit = x.unit ? '/' + x.unit : '';
+    const d = (x.date || '').slice(0, 10).split('-').reverse().join('/');
+    return d ? `${fmt(x.price)}${unit} (${d})` : `${fmt(x.price)}${unit}`;
+  };
+
+  const cards = rows.map(r => {
+    const thumb = r.image
+      ? `<img class="c-thumb" src="${esc(r.image)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : '';
+    const supBlocks = sups.map(s => {
+      const cell = r.cells[s.id];
+      const url = r.urls && r.urls[s.id];
+      if (!s.ok) return '';
+
+      const has = cell && Object.keys(cell).length > 0;
+      if (!has) {
+        return `<div class="csup"><div class="csup-name">${esc(s.name)}</div><div class="csup-x">Không có bán</div></div>`;
+      }
+      const anyPrice = units.some(u => {
+        const v = cell[u.key];
+        return v && v.price != null;
+      });
+      if (!anyPrice) {
+        // Thuốc kê đơn
+        const supName = (r.names && r.names[s.id]) ? r.names[s.id] : '';
+        const inner = url
+          ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(supName)}">Thuốc kê đơn</a>`
+          : 'Thuốc kê đơn';
+        const qa = (r.qa_prices || {})[s.id];
+        const rv = (r.review_prices || {})[s.id];
+        let meta = '';
+        if (qa && qa.length) meta += `<span class="meta qa">giá từ hỏi đáp: ${qa.slice(0, 3).map(fmtItem).join(' · ')}</span>`;
+        if (rv && rv.length) meta += `<span class="meta review">giá từ đánh giá: ${rv.slice(0, 3).map(fmtItem).join(' · ')}</span>`;
+        return `<div class="csup"><div class="csup-name">${esc(s.name)}</div><div class="kedon">${inner}${meta}</div></div>`;
+      }
+
+      const supName = (r.names && r.names[s.id]) ? r.names[s.id] : '';
+      const chips = units.map(u => {
+        const v = cell && cell[u.key];
+        if (!v || v.price == null) return '';
+        const badge = (v.price === minPrice) ? '<span class="badge">Rẻ nhất</span>' : '';
+        const inner = url
+          ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(supName)}">${fmt(v.price)}</a>`
+          : fmt(v.price);
+        return `<div class="chip">${esc(u.name)}: ${inner}${badge}</div>`;
+      }).filter(Boolean).join('');
+      return `<div class="csup"><div class="csup-name">${esc(s.name)}</div><div class="chips">${chips}</div></div>`;
+    }).join('');
+
+    return `<div class="card"><div class="c-head">${thumb}<div class="c-title">${esc(r.title)}</div></div>${supBlocks}</div>`;
+  }).join('');
+
+  const errNote = errSups.map(s =>
+    `<div class="sup-err-note">⚠ ${esc(s.name)}: không lấy được dữ liệu — ${esc(s.error || 'lỗi không xác định')}</div>`
+  ).join('');
+
+  $results.innerHTML = `<div class="cards">${cards}</div>${errNote}`;
+}
 
 // ================= Tra cứu trực tiếp từ trình duyệt (GitHub Pages, không backend) =================
 const SUPPLIERS = [
