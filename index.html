@@ -353,7 +353,7 @@ function render(q, data) {
       const has = cell && Object.keys(cell).length > 0;
       if (!has) {
         // Không có ở nhà cung cấp này -> gộp các ô đơn vị
-        return `<td class="x gstart" colspan="${units.length}">Không có bán</td>`;
+        return `<td class="x gstart" colspan="${units.length}">Không tìm thấy</td>`;
       }
       const anyPrice = units.some(u => {
         const v = cell[u.key];
@@ -470,7 +470,7 @@ function renderMobile(q, data) {
 
     let body = '';
     if (!supRows.length) {
-      body = `<div class="csup"><div class="csup-name">${esc(supNoCell[0] ? supNoCell[0].name : '')}</div><div class="csup-x">Không có bán</div></div>`;
+      body = `<div class="csup"><div class="csup-name">${esc(supNoCell[0] ? supNoCell[0].name : '')}</div><div class="csup-x">Không tìm thấy</div></div>`;
     } else if (!priceSups.length) {
       // Tất cả là thuốc kê đơn: giữ block cũ (link + giá từ hỏi đáp/đánh giá)
       body = supRows.map(kedonBlock).join('');
@@ -496,7 +496,7 @@ function renderMobile(q, data) {
       // Supplier kê đơn (có mặt nhưng không giá) -> block riêng: link + giá từ hỏi đáp/đánh giá
       if (rxSups.length) body += rxSups.map(kedonBlock).join('');
       if (supNoCell.length) {
-        body += supNoCell.map(s => `<div class="ct-nosup">${esc(s.name)}: không có bán</div>`).join('');
+        body += supNoCell.map(s => `<div class="ct-nosup">${esc(s.name)}: không tìm thấy</div>`).join('');
       }
     }
 
