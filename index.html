@@ -158,10 +158,11 @@
   td.kedon a:hover { color: var(--frost2); text-decoration: underline; }
   td.kedon .meta {
     display: block; font-style: normal; font-size: 0.75rem; font-weight: 600;
-    margin-top: 2px; white-space: nowrap;
+    margin-top: 2px;
   }
   td.kedon .meta.qa { color: var(--green); }
   td.kedon .meta.review { color: var(--frost0); }
+  td.kedon .meta.hidden { color: var(--yellow); }
   td.x { color: var(--light0); opacity: 0.5; font-style: italic; }
   td.na { color: var(--light0); opacity: 0.35; }
   .gstart { border-left: 1px solid var(--dark2); }
@@ -220,6 +221,7 @@
   .kedon .meta { display: block; font-style: normal; font-size: 0.75rem; font-weight: 600; margin-top: 2px; }
   .kedon .meta.qa { color: var(--green); }
   .kedon .meta.review { color: var(--frost0); }
+  .kedon .meta.hidden { color: var(--yellow); }
 
   /* Mini-bảng: hàng = nhà cung cấp, cột = đơn vị (nhìn dọc thẳng hàng) */
   .c-table { border-top: 1px solid var(--dark2); }
@@ -394,6 +396,8 @@ function render(q, data) {
         let meta = '';
         if (qa && qa.length) meta += `<span class="meta qa">giá từ hỏi đáp: ${qa.slice(0, 3).map(fmtItem).join(' · ')}</span>`;
         if (rv && rv.length) meta += `<span class="meta review">giá từ đánh giá: ${rv.slice(0, 3).map(fmtItem).join(' · ')}</span>`;
+        const hp = (r.hidden_prices || {})[s.id];
+        if (hp && hp.length) meta += `<span class="meta hidden">Giá ẩn: ${hp.map(x => fmt(x.price) + (x.unit ? '/' + x.unit : '')).join(' · ')}</span>`;
         return `<td class="kedon gstart" colspan="${units.length}">${inner}${meta}</td>`;
       }
 
@@ -494,6 +498,8 @@ function renderMobile(q, data) {
       let meta = '';
       if (qa && qa.length) meta += `<span class="meta qa">giá từ hỏi đáp: ${qa.slice(0, 3).map(fmtItem).join(' · ')}</span>`;
       if (rv && rv.length) meta += `<span class="meta review">giá từ đánh giá: ${rv.slice(0, 3).map(fmtItem).join(' · ')}</span>`;
+      const hp = (r.hidden_prices || {})[s.id];
+      if (hp && hp.length) meta += `<span class="meta hidden">Giá ẩn: ${hp.map(x => fmt(x.price) + (x.unit ? '/' + x.unit : '')).join(' · ')}</span>`;
       return `<div class="csup"><div class="csup-name">${esc(s.name)}</div><div class="kedon">${inner}${meta}</div></div>`;
     };
 
@@ -718,7 +724,20 @@ async function matrixSearch(q) {
       }
       if (it.url) row.urls[s.id] = it.url;
       if (it.sku) row.skus[s.id] = it.sku;
-      if (it.rx) row.rx[s.id] = true;
+      if (it.rx) {
+        row.rx[s.id] = true;
+        // Giá ẩn: API có giá nhưng website giấu -> hiển thị tham khảo
+        const hidden = [];
+        const seenU = new Set();
+        for (const v of it.variants) {
+          if (v.price == null) continue;
+          const u = norm(v.unit || '') || 'khác';
+          if (seenU.has(u)) continue;
+          seenU.add(u);
+          hidden.push({ price: v.price, unit: v.unit || '' });
+        }
+        if (hidden.length) (row.hidden_prices = row.hidden_prices || {})[s.id] = hidden.slice(0, 3);
+      }
       row.names[s.id] = it.title;
       row.best_score = Math.max(row.best_score, it._score || 0);
       const cell = {};
