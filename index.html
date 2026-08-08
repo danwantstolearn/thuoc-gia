@@ -58,7 +58,7 @@
     padding: 6px;
     transition: box-shadow 0.15s, border-color 0.15s;
   }
-  .searchbox.stuck { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); border-color: var(--dark3); }
+  .searchbox.stuck { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); border-color: var(--frost2); }
   .searchbox:focus-within { border-color: var(--frost2); }
   .searchbox .input-wrap {
     flex: 1; min-width: 0;
@@ -105,18 +105,20 @@
   }
   table.matrix { width: 100%; border-collapse: collapse; min-width: 640px; }
 
-  thead { position: sticky; top: 68px; z-index: 2; background: var(--dark1); }
+  thead { position: sticky; top: 68px; z-index: 2; background: var(--dark2); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35); }
   thead th {
     font-size: 0.75rem; font-weight: 600; color: var(--light0);
     padding: 8px 10px; text-align: center;
-    border-bottom: 1px solid var(--dark2);
   }
   thead tr.l1 th { font-size: 0.875rem; color: var(--light2); padding-top: 11px; }
-  thead tr.l2 th { color: var(--light0); padding-bottom: 9px; }
+  thead tr.l2 th {
+    color: var(--light0); padding-bottom: 9px;
+    border-bottom: 2px solid var(--frost3);
+  }
   thead th.col-name {
     text-align: left; color: var(--light0);
     font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em;
-    position: sticky; left: 0; z-index: 3; background: var(--dark1);
+    position: sticky; left: 0; z-index: 3; background: var(--dark2);
   }
   thead th.sup-err { color: var(--red); }
   thead th .sup-sugg {
