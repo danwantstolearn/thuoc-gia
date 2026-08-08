@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tra giá thuốc</title>
+<style>
+  /* Obsidian Nord — đồng bộ theme nqhaidang.com (quartz obsidian-nord) */
+  :root {
+    --dark0: #2e3440;
+    --dark1: #3b4252;
+    --dark2: #434c5e;
+    --dark3: #4c566a;
+    --light0: #d8dee9;
+    --light1: #e5e9f0;
+    --light2: #eceff4;
+    --frost0: #8fbcbb;
+    --frost1: #88c0d0;
+    --frost2: #81a1c1;
+    --frost3: #5e81ac;
+    --red: #bf616a;
+    --orange: #d08770;
+    --yellow: #ebcb8b;
+    --green: #a3be8c;
+    --purple: #b48ead;
+    --radius-s: 4px;
+    --radius-m: 8px;
+    --radius-l: 12px;
+    --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+             system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  ::selection { background: rgba(191, 97, 106, 0.5); }
+
+  body {
+    font-family: var(--font);
+    background: var(--dark0);
+    color: var(--light2);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 40px 16px 60px; }
+
+  header { text-align: center; margin-bottom: 24px; }
+  header h1 {
+    font-size: 1.618rem;  /* golden ratio, theo theme */
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: var(--light2);
+  }
+  header p { color: var(--light0); margin-top: 8px; font-size: 0.875rem; }
+
+  .searchbox {
+    display: flex; gap: 8px;
+    background: var(--dark1);
+    border: 1px solid var(--dark2);
+    border-radius: var(--radius-m);
+    padding: 6px;
+  }
+  .searchbox:focus-within { border-color: var(--frost2); }
+  .searchbox input {
+    flex: 1; border: none; outline: none; background: transparent;
+    color: var(--light2); font-size: 1rem; padding: 9px 12px;
+    border-radius: var(--radius-s); font-family: var(--font);
+  }
+  .searchbox input::placeholder { color: rgba(216, 222, 233, 0.55); }
+  .searchbox button {
+    border: none; background: var(--frost2); color: var(--dark0);
+    font-size: 0.9375rem; font-weight: 600; padding: 9px 20px;
+    border-radius: var(--radius-s); cursor: pointer; font-family: var(--font);
+    transition: background 0.15s;
+  }
+  .searchbox button:hover { background: var(--frost1); }
+  .searchbox button:disabled { opacity: 0.5; cursor: wait; }
+
+  .status { text-align: center; color: var(--light0); margin: 16px 0 12px; font-size: 0.875rem; min-height: 20px; }
+  .status.error { color: var(--red); }
+
+  .matrix-wrap {
+    background: var(--dark1);
+    border: 1px solid var(--dark2);
+    border-radius: var(--radius-m);
+    overflow-x: auto;
+  }
+  table.matrix { width: 100%; border-collapse: collapse; min-width: 640px; }
+
+  thead { position: sticky; top: 0; z-index: 2; background: var(--dark1); }
+  thead th {
+    font-size: 0.75rem; font-weight: 600; color: var(--light0);
+    padding: 8px 10px; text-align: center;
+    border-bottom: 1px solid var(--dark2);
+  }
+  thead tr.l1 th { font-size: 0.875rem; color: var(--light2); padding-top: 11px; }
+  thead tr.l2 th { color: var(--light0); padding-bottom: 9px; }
+  thead th.col-name {
+    text-align: left; color: var(--light0);
+    font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em;
+    position: sticky; left: 0; z-index: 3; background: var(--dark1);
+  }
+  thead th.sup-err { color: var(--red); }
+
+  tbody td { padding: 8px 10px; font-size: 0.8125rem; vertical-align: middle; text-align: center; }
+  tbody tr { border-bottom: 1px solid var(--dark2); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--dark3); }
+
+  td.thumb {
+    position: sticky; left: 0; z-index: 1; background: var(--dark1);
+    padding: 6px 8px; text-align: center;
+  }
+
+  td.name {
+    text-align: left; min-width: 280px; max-width: 420px; line-height: 1.4; font-weight: 400;
+    position: sticky; left: 0; background: var(--dark1); z-index: 1;
+  }
+  td.name .name-row { display: flex; align-items: center; gap: 14px; }
+  td.name .title { flex: 1; min-width: 0; }
+  td.name .row-thumb {
+    width: 150px; height: 150px; object-fit: contain; flex-shrink: 0;
+    border-radius: var(--radius-s); border: 1px solid var(--dark2);
+    background: var(--dark0);
+  }
+  tbody tr:hover td.thumb, tbody tr:hover td.name { background: var(--dark3); }
+  td.name a { color: var(--orange); text-decoration: none; }
+  td.name a:hover { color: var(--frost2); text-decoration: underline; }
+  td.price { font-weight: 600; white-space: nowrap; }
+  td.price a, td.x a { color: inherit; text-decoration: none; display: inline-block; }
+  td.price a:hover, td.x a:hover { color: var(--frost1); text-decoration: underline; }
+  td.kedon { font-style: italic; }
+  td.kedon a { color: var(--orange); text-decoration: none; font-style: normal; }
+  td.kedon a:hover { color: var(--frost2); text-decoration: underline; }
+  td.price .badge {
+    display: inline-block; font-size: 0.5625rem; font-weight: 700; color: var(--dark0);
+    background: var(--green); border-radius: var(--radius-s); padding: 1px 5px;
+    margin-left: 4px; vertical-align: middle; letter-spacing: 0.02em;
+  }
+  td.x { color: var(--light0); opacity: 0.5; font-style: italic; }
+  td.na { color: var(--light0); opacity: 0.35; }
+  .gstart { border-left: 1px solid var(--dark2); }
+
+  .sup-err-note { padding: 10px 16px; color: var(--red); font-size: 0.8125rem; border-top: 1px solid var(--dark2); }
+  .empty { padding: 28px 16px; text-align: center; color: var(--light0); font-size: 0.875rem; }
+
+  footer { text-align: center; color: var(--light0); opacity: 0.75; font-size: 0.75rem; margin-top: 28px; line-height: 1.6; }
+
+  .thumb-tooltip,
+  .thumb-tooltip img { display: none; }
+
+  ::-webkit-scrollbar { height: 10px; width: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--dark3); border-radius: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @media (max-width: 560px) {
+    .wrap { padding-top: 28px; }
+    td, th { padding: 7px 9px; }
+    .searchbox button { padding: 9px 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Tra giá thuốc</h1>
+    <p>So sánh giá giữa các nhà cung cấp, theo từng đơn vị bán</p>
+  </header>
+
+  <div class="searchbox">
+    <input id="q" type="text" placeholder="VD: paracetamol, amoxicillin, panadol..." autocomplete="off">
+    <button id="btn">Tra cứu</button>
+  </div>
+  <div id="status" class="status"></div>
+
+  <div id="results"></div>
+
+  <footer>
+    Giá lấy trực tiếp từ trang web nhà cung cấp, có thể thay đổi theo thời điểm.<br>
+    "x" = không bán / không có giá công khai (thuốc kê đơn). Dùng cho mục đích tham khảo cá nhân.
+  </footer>
+</div>
+
+<script>
+const $q = document.getElementById('q');
+const $btn = document.getElementById('btn');
+const $status = document.getElementById('status');
+const $results = document.getElementById('results');
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+const fmt = n => n.toLocaleString('vi-VN') + '₫';
+
+async function search() {
+  const q = $q.value.trim();
+  if (!q) { $status.textContent = 'Nhập tên thuốc đã!'; return; }
+
+  $btn.disabled = true;
+  $status.className = 'status';
+  $status.textContent = 'Đang tra cứu từ các nhà cung cấp...';
+  $results.innerHTML = '';
+
+  try {
+    let data = null;
+    // Ưu tiên backend Flask nếu có (chạy local); không có thì gọi thẳng API supplier
+    try {
+      const r = await fetch('/api/search?q=' + encodeURIComponent(q));
+      if (r.ok) data = await r.json();
+    } catch (e) { /* không có backend (GitHub Pages) */ }
+    if (!data) data = await matrixSearch(q);
+    render(q, data);
+  } catch (e) {
+    $status.className = 'status error';
+    $status.textContent = 'Lỗi: ' + e.message;
+  } finally {
+    $btn.disabled = false;
+  }
+}
+
+function render(q, data) {
+  const sups = data.suppliers || [];
+  const units = data.units || [];
+  const rows = data.rows || [];
+  const okSups = sups.filter(s => s.ok);
+  const errSups = sups.filter(s => !s.ok);
+
+  if (!rows.length) {
+    $status.textContent = `Không tìm thấy sản phẩm cho "${q}"`;
+    $results.innerHTML = errSups.map(s =>
+      `<div class="matrix-wrap"><div class="sup-err-note">${esc(s.name)}: không lấy được dữ liệu — ${esc(s.error || 'lỗi không xác định')}</div></div>`
+    ).join('');
+    return;
+  }
+
+  $status.textContent = `Tìm thấy ${rows.length} sản phẩm cho "${q}" (${okSups.length}/${sups.length} nhà cung cấp)`;
+
+  // giá rẻ nhất toàn bảng
+  let minPrice = Infinity;
+  rows.forEach(r => sups.forEach(s => {
+    const cell = r.cells[s.id]; if (!cell) return;
+    units.forEach(u => { const v = cell[u.key]; if (v && v.price != null && v.price < minPrice) minPrice = v.price; });
+  }));
+
+  const thead1 = `<tr class="l1">
+    <th class="col-name" rowspan="2">Tên thuốc</th>` +
+    sups.map(s => `<th colspan="${units.length}" class="${s.ok ? 'gstart' : 'gstart sup-err'}">${esc(s.name)}${s.ok ? '' : ' (lỗi)'}</th>`).join('') +
+    `</tr>`;
+  const thead2 = `<tr class="l2">` +
+    sups.map(s => units.map((u, ui) => `<th class="${ui === 0 ? 'gstart' : ''}">${esc(u.name)}</th>`).join('')).join('') +
+    `</tr>`;
+
+  const tbody = rows.map(r => {
+    const thumb = r.image
+      ? `<img class="row-thumb" src="${esc(r.image)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : '';
+    const nameRow = `<div class="name-row"><span class="title">${esc(r.title)}</span>${thumb}</div>`;
+    const cells = sups.map((s, si) => {
+      const cell = r.cells[s.id];
+      const url = r.urls && r.urls[s.id];
+      if (!s.ok) return units.map(() => `<td class="na">–</td>`).join('');
+
+      const has = cell && Object.keys(cell).length > 0;
+      if (!has) {
+        // Không có ở nhà cung cấp này -> gộp các ô đơn vị
+        return `<td class="x gstart" colspan="${units.length}">Không có bán</td>`;
+      }
+      const anyPrice = units.some(u => {
+        const v = cell[u.key];
+        return v && v.price != null;
+      });
+      if (!anyPrice) {
+        // Thuốc kê đơn (không có giá công khai) -> gộp + link
+        const inner = url
+          ? `<a href="${esc(url)}" target="_blank" rel="noopener">Thuốc kê đơn</a>`
+          : 'Thuốc kê đơn';
+        return `<td class="kedon gstart" colspan="${units.length}">${inner}</td>`;
+      }
+
+      return units.map((u, ui) => {
+        const v = cell && cell[u.key];
+        const g = ui === 0 ? ' gstart' : '';
+        const wrap = (inner) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${inner}</a>` : inner;
+        if (!v || v.price == null) return `<td class="x${g}">${wrap('x')}</td>`;
+        const badge = (v.price === minPrice) ? '<span class="badge">Rẻ nhất</span>' : '';
+        return `<td class="price${g}">${wrap(fmt(v.price))}${badge}</td>`;
+      }).join('');
+    }).join('');
+    return `<tr><td class="name">${nameRow}</td>${cells}</tr>`;
+  }).join('');
+
+  const errNote = errSups.map(s =>
+    `<div class="sup-err-note">⚠ ${esc(s.name)}: không lấy được dữ liệu — ${esc(s.error || 'lỗi không xác định')}</div>`
+  ).join('');
+
+  $results.innerHTML = `
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <thead>${thead1}${thead2}</thead>
+        <tbody>${tbody}</tbody>
+      </table>
+      ${errNote}
+    </div>`;
+}
+
+$btn.addEventListener('click', search);
+$q.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+$q.focus();
+
+// ================= Tra cứu trực tiếp từ trình duyệt (GitHub Pages, không backend) =================
+const SUPPLIERS = [
+  { id: 'longchau', name: 'Nhà thuốc Long Châu' },
+  { id: 'pharmacity', name: 'Pharmacity' },
+];
+const STOP = new Set(
+  'vien sui thuoc hop vi goi tup lo chai ong tui dieu tri giam dau ha sot cam cum dung ngay cho be em phu nu nam tre nho lon moi nang ca'.split(' ')
+);
+const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const UNIT_PREF = ['vien', 'vi', 'hop'];
+
+function parsePharmacity(d) {
+  const out = [];
+  for (const it of ((d.data || {}).items || [])) {
+    const name = (it.name || '').trim();
+    const slug = it.slug;
+    if (!name || !slug) continue;
+    const variants = [];
+    for (const v of (it.variants || [])) {
+      if (v.price == null) continue;
+      const unit = (v.unit_name || '').trim();
+      const price = Math.round(Number(v.price));
+      variants.push({ price, unit, price_text: price.toLocaleString('en-US').replace(/,/g, '.') + ' ₫' + (unit ? '/' + unit : '') });
+    }
+    if (!variants.length) continue;
+    out.push({
+      title: name.slice(0, 160), price: variants[0].price, price_text: variants[0].price_text,
+      variants, image: (it.thumbnail || {}).image_url || '',
+      url: 'https://www.pharmacity.vn/' + slug + '.html',
+    });
+  }
+  return out;
+}
+
+function parseLongChau(d) {
+  const out = [];
+  for (const p of (d.products || [])) {
+    const name = (p.webName || p.name || '').trim();
+    const slug = p.slug;
+    if (!name || !slug) continue;
+    const prices = (p.prices && p.prices.length) ? p.prices : (p.price ? [p.price] : []);
+    const variants = [];
+    for (const pr of prices) {
+      const unit = (pr.measureUnitName || '').trim();
+      const price = pr.price != null ? Math.round(Number(pr.price)) : null;
+      variants.push({
+        price, unit,
+        price_text: price != null
+          ? price.toLocaleString('en-US').replace(/,/g, '.') + ' ₫' + (unit ? '/' + unit : '')
+          : 'Liên hệ' + (unit ? ' (' + unit + ')' : ''),
+      });
+    }
+    if (!variants.length) continue;
+    out.push({
+      title: name.slice(0, 160), price: variants[0].price, price_text: variants[0].price_text,
+      variants, image: p.image || '',
+      url: 'https://nhathuoclongchau.com.vn/' + slug,
+    });
+  }
+  return out;
+}
+
+async function fetchSupplier(sup, q) {
+  try {
+    if (sup.id === 'pharmacity') {
+      const url = 'https://api-gateway.pharmacity.vn/pmc-ecm-product/api/public/search/index'
+        + '?platform=1&index=1&limit=20&total=0&refresh=true&keyword=' + encodeURIComponent(q);
+      const r = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return parsePharmacity(await r.json());
+    }
+    if (sup.id === 'longchau') {
+      const r = await fetch(
+        'https://api.nhathuoclongchau.com.vn/lccus/search-product-service/api/products/ecom/product/search',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: q }) }
+      );
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return parseLongChau(await r.json());
+    }
+    throw new Error('Không rõ nhà cung cấp');
+  } catch (e) {
+    return null;
+  }
+}
+
+function rerank(items, query) {
+  const tokens = norm(query).split(' ').filter(t => t.length >= 2);
+  if (!tokens.length) return items;
+  const weights = tokens.map(t => STOP.has(t) ? 0.5 : 3.0);
+  const rare = tokens.filter((t, i) => weights[i] > 1);
+  const score = it => {
+    const t = norm(it.title);
+    let s = 0;
+    tokens.forEach((tok, i) => { if (t.includes(tok)) s += weights[i]; });
+    if (rare.length && t.startsWith(rare[0])) s += 1.5;
+    return s;
+  };
+  items.forEach(it => { it._score = score(it); });
+  return items.slice().sort((a, b) =>
+    (b._score - a._score) || ((a.price ?? 1e12) - (b.price ?? 1e12))
+  );
+}
+
+function productKey(title) {
+  const toks = norm(title).split(' ').filter(t => !STOP.has(t) && t.length >= 2);
+  return toks.slice(0, 2).join(' ');
+}
+
+async function matrixSearch(q) {
+  const results = await Promise.all(SUPPLIERS.map(async s => ({ s, items: await fetchSupplier(s, q) })));
+
+  const rows = {};
+  const unitDisp = {};
+  const suppliersMeta = [];
+
+  for (const { s, items } of results) {
+    if (!items) {
+      suppliersMeta.push({ id: s.id, name: s.name, ok: false, error: 'Không lấy được dữ liệu' });
+      continue;
+    }
+    suppliersMeta.push({ id: s.id, name: s.name, ok: true, error: null });
+    const ranked = rerank(items, q).slice(0, 20);
+    for (const it of ranked) {
+      const k = productKey(it.title);
+      if (!k) continue;
+      let row = rows[k];
+      if (!row) row = rows[k] = { title: it.title, url: it.url, image: it.image || '', urls: {}, cells: {}, best_score: 0 };
+      if (it.title.length > row.title.length) row.title = it.title;
+      if (!row.image && it.image) row.image = it.image;
+      if (it.url) { row.urls[s.id] = it.url; row.url = it.url; }
+      row.best_score = Math.max(row.best_score, it._score || 0);
+      const cell = {};
+      for (const v of it.variants) {
+        const u = norm(v.unit) || 'khác';
+        unitDisp[u] = v.unit || 'Khác';
+        cell[u] = { price: v.price, price_text: v.price_text };
+      }
+      row.cells[s.id] = cell;
+    }
+  }
+
+  const present = UNIT_PREF.filter(u => unitDisp[u]);
+  const others = Object.keys(unitDisp).filter(u => !UNIT_PREF.includes(u)).sort();
+  const units = [...present, ...others].map(u => ({ key: u, name: unitDisp[u] }));
+
+  const rowMin = r => {
+    let m = null;
+    for (const c of Object.values(r.cells)) {
+      for (const v of Object.values(c)) {
+        if (v.price != null) m = (m == null) ? v.price : Math.min(m, v.price);
+      }
+    }
+    return m;
+  };
+  const rowsList = Object.values(rows)
+    .sort((a, b) => (b.best_score - a.best_score) || ((rowMin(a) ?? 1e12) - (rowMin(b) ?? 1e12)))
+    .slice(0, 10);
+
+  return { query: q, limit: 10, units, suppliers: suppliersMeta, rows: rowsList };
+}
+</script>
+</body>
+</html>
