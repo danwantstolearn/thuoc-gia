@@ -135,11 +135,6 @@
   }
   td.kedon .meta.qa { color: var(--green); }
   td.kedon .meta.review { color: var(--frost0); }
-  td.price .badge {
-    display: inline-block; font-size: 0.5625rem; font-weight: 700; color: var(--dark0);
-    background: var(--green); border-radius: var(--radius-s); padding: 1px 5px;
-    margin-left: 4px; vertical-align: middle; letter-spacing: 0.02em;
-  }
   td.x { color: var(--light0); opacity: 0.5; font-style: italic; }
   td.na { color: var(--light0); opacity: 0.35; }
   .gstart { border-left: 1px solid var(--dark2); }
@@ -187,11 +182,6 @@
   }
   .chip a { color: var(--orange); text-decoration: none; font-weight: 600; }
   .chip a:hover { color: var(--frost1); text-decoration: underline; }
-  .chip .badge {
-    display: inline-block; font-size: 0.5625rem; font-weight: 700; color: var(--dark0);
-    background: var(--green); border-radius: var(--radius-s); padding: 1px 5px;
-    letter-spacing: 0.02em;
-  }
   .csup-x { color: var(--light0); opacity: 0.55; font-style: italic; font-size: 0.8125rem; }
   .kedon a { color: var(--orange); text-decoration: none; }
   .kedon a:hover { color: var(--frost2); text-decoration: underline; }
@@ -287,13 +277,6 @@ function render(q, data) {
 
   $status.textContent = `Tìm thấy ${rows.length} sản phẩm cho "${q}" (${okSups.length}/${sups.length} nhà cung cấp)`;
 
-  // giá rẻ nhất toàn bảng
-  let minPrice = Infinity;
-  rows.forEach(r => sups.forEach(s => {
-    const cell = r.cells[s.id]; if (!cell) return;
-    units.forEach(u => { const v = cell[u.key]; if (v && v.price != null && v.price < minPrice) minPrice = v.price; });
-  }));
-
   const thead1 = `<tr class="l1">
     <th class="col-name" rowspan="2">Tên thuốc</th>` +
     sups.map(s => `<th colspan="${units.length}" class="${s.ok ? 'gstart' : 'gstart sup-err'}">${esc(s.name)}${s.ok ? '' : ' (lỗi)'}</th>`).join('') +
@@ -346,8 +329,7 @@ function render(q, data) {
         const supName = (r.names && r.names[s.id]) ? r.names[s.id] : '';
         const wrap = (inner) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(supName)}">${inner}</a>` : inner;
         if (!v || v.price == null) return `<td class="x${g}">${wrap('x')}</td>`;
-        const badge = (v.price === minPrice) ? '<span class="badge">Rẻ nhất</span>' : '';
-        return `<td class="price${g}">${wrap(fmt(v.price))}${badge}</td>`;
+        return `<td class="price${g}">${wrap(fmt(v.price))}</td>`;
       }).join('');
     }).join('');
     return `<tr><td class="name">${nameRow}</td>${cells}</tr>`;
@@ -388,13 +370,6 @@ function renderMobile(q, data) {
   }
 
   $status.textContent = `Tìm thấy ${rows.length} sản phẩm cho "${q}" (${okSups.length}/${sups.length} nhà cung cấp)`;
-
-  // giá rẻ nhất toàn bảng
-  let minPrice = Infinity;
-  rows.forEach(r => sups.forEach(s => {
-    const cell = r.cells[s.id]; if (!cell) return;
-    units.forEach(u => { const v = cell[u.key]; if (v && v.price != null && v.price < minPrice) minPrice = v.price; });
-  }));
 
   const fmtItem = x => {
     const unit = x.unit ? '/' + x.unit : '';
@@ -437,11 +412,10 @@ function renderMobile(q, data) {
       const chips = units.map(u => {
         const v = cell && cell[u.key];
         if (!v || v.price == null) return '';
-        const badge = (v.price === minPrice) ? '<span class="badge">Rẻ nhất</span>' : '';
         const inner = url
           ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(supName)}">${fmt(v.price)}</a>`
           : fmt(v.price);
-        return `<div class="chip">${esc(u.name)}: ${inner}${badge}</div>`;
+        return `<div class="chip">${esc(u.name)}: ${inner}</div>`;
       }).filter(Boolean).join('');
       return `<div class="csup"><div class="csup-name">${esc(s.name)}</div><div class="chips">${chips}</div></div>`;
     }).join('');
