@@ -592,7 +592,11 @@ async function matrixSearch(q) {
       continue;
     }
     suppliersMeta.push({ id: s.id, name: s.name, ok: true, error: null });
-    const ranked = rerank(items, q).slice(0, 20);
+    // Lọc bỏ SP không khớp từ khóa nào (search fuzzy trả kèm rác) — chỉ khi query có token thật
+    let ranked = rerank(items, q);
+    const qTokens = norm(q).split(' ').filter(t => t.length >= 2);
+    if (qTokens.length) ranked = ranked.filter(it => (it._score || 0) > 0);
+    ranked = ranked.slice(0, 20);
     for (const it of ranked) {
       const k = productKey(it.title);
       if (!k) continue;
