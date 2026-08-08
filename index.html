@@ -277,8 +277,9 @@ function render(q, data) {
       });
       if (!anyPrice) {
         // Thuốc kê đơn (không có giá công khai) -> gộp + link
+        const supName = (r.names && r.names[s.id]) ? r.names[s.id] : '';
         const inner = url
-          ? `<a href="${esc(url)}" target="_blank" rel="noopener">Thuốc kê đơn</a>`
+          ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(supName)}">Thuốc kê đơn</a>`
           : 'Thuốc kê đơn';
         const qa = (r.qa_prices || {})[s.id];
         const rv = (r.review_prices || {})[s.id];
@@ -296,7 +297,8 @@ function render(q, data) {
       return units.map((u, ui) => {
         const v = cell && cell[u.key];
         const g = ui === 0 ? ' gstart' : '';
-        const wrap = (inner) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${inner}</a>` : inner;
+        const supName = (r.names && r.names[s.id]) ? r.names[s.id] : '';
+        const wrap = (inner) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(supName)}">${inner}</a>` : inner;
         if (!v || v.price == null) return `<td class="x${g}">${wrap('x')}</td>`;
         const badge = (v.price === minPrice) ? '<span class="badge">Rẻ nhất</span>' : '';
         return `<td class="price${g}">${wrap(fmt(v.price))}${badge}</td>`;
@@ -329,7 +331,7 @@ const SUPPLIERS = [
   { id: 'pharmacity', name: 'Pharmacity' },
 ];
 const STOP = new Set(
-  'vien sui thuoc hop vi goi tup lo chai ong tui dieu tri giam dau ha sot cam cum dung ngay cho be em phu nu nam tre nho lon moi nang ca'.split(' ')
+  'vien thuoc hop vi goi tup lo chai ong tui dieu tri giam dau ha sot dung ngay cho be em phu nu nam tre nho lon moi nang ca va co nhe manh cac con'.split(' ')
 );
 const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const UNIT_PREF = ['vien', 'vi', 'hop'];
@@ -427,8 +429,9 @@ function rerank(items, query) {
 }
 
 function productKey(title) {
+  // 4 token đặc trưng (không chứa sui/cam/cum — chúng là phần tên sản phẩm)
   const toks = norm(title).split(' ').filter(t => !STOP.has(t) && t.length >= 2);
-  return toks.slice(0, 2).join(' ');
+  return toks.slice(0, 4).join(' ');
 }
 
 async function matrixSearch(q) {
@@ -449,11 +452,19 @@ async function matrixSearch(q) {
       const k = productKey(it.title);
       if (!k) continue;
       let row = rows[k];
-      if (!row) row = rows[k] = { title: it.title, url: it.url, image: it.image || '', urls: {}, skus: {}, cells: {}, best_score: 0 };
-      if (it.title.length > row.title.length) row.title = it.title;
-      if (!row.image && it.image) row.image = it.image;
-      if (it.url) { row.urls[s.id] = it.url; row.url = it.url; }
-      if (it.sku) { row.skus[s.id] = it.sku; }
+      if (!row) row = rows[k] = { title: it.title, url: it.url, image: it.image || '', names: {}, urls: {}, skus: {}, cells: {}, best_score: 0, _rep_score: -1, _rep_img: false };
+      // Item đại diện: score cao nhất, ưu tiên có ảnh — title/hình/url cùng 1 sản phẩm
+      const score = it._score || 0;
+      if (score > row._rep_score || (score === row._rep_score && it.image && !row._rep_img)) {
+        row.title = it.title;
+        row.image = it.image || '';
+        row.url = it.url || '';
+        row._rep_score = score;
+        row._rep_img = !!it.image;
+      }
+      if (it.url) row.urls[s.id] = it.url;
+      if (it.sku) row.skus[s.id] = it.sku;
+      row.names[s.id] = it.title;
       row.best_score = Math.max(row.best_score, it._score || 0);
       const cell = {};
       for (const v of it.variants) {
